@@ -1,0 +1,3 @@
+#!/bin/bash
+
+export GOLLYX_PELICAN_HOME="${HOME}/golly/pelican/gollyx-v-pelican"
