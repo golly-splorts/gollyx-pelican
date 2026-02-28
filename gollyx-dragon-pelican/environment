@@ -1,0 +1,3 @@
+#!/bin/bash
+
+export GOLLYX_DRAGON_PELICAN_HOME="${HOME}/golly/gollyx-dragon-pelican"
