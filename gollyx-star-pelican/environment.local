@@ -1,0 +1,9 @@
+#!/bin/bash
+
+export GOLLYX_PELICAN_HOME="${HOME}/golly/pelican/gollyx-star-pelican"
+export GOLLYX_UI_PORT="8888"
+export GOLLYX_API_PORT="8989"
+
+export GOLLYX_BASE_UI="http://127.0.0.1:${GOLLYX_UI_PORT}"
+export GOLLYX_BASE_API="https://cloud.star.golly456.life"
+export GOLLYX_MAPS_API="https://maps.golly456.life"
