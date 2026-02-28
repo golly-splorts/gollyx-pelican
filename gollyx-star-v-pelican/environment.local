@@ -1,0 +1,20 @@
+#!/bin/bash
+
+export GOLLYX_PELICAN_HOME="${HOME}/golly/pelican/gollyx-star-v-pelican"
+export GOLLYX_UI_PORT="8000"
+export GOLLYX_API_PORT="5000"
+
+# # Use prod api endpoint
+# export GOLLYX_BASE_UI="http://localhost:${GOLLYX_UI_PORT}"
+# export GOLLYX_BASE_API="https://cloud.star.v.golly.life"
+# export GOLLYX_MAPS_API="https://maps.golly.life"
+
+# # Use integration api endpoint
+# export GOLLYX_BASE_UI="http://localhost:${GOLLYX_UI_PORT}"
+# export GOLLYX_BASE_API="https://cloud.star.v.golly456.life"
+# export GOLLYX_MAPS_API="https://maps.golly456.life"
+
+# Use local api endpoint
+export GOLLYX_BASE_UI="http://localhost:${GOLLYX_UI_PORT}"
+export GOLLYX_BASE_API="http://localhost:${GOLLYX_API_PORT}"
+export GOLLYX_MAPS_API="https://maps.golly456.life"
