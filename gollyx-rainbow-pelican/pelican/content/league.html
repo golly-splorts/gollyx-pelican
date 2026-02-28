@@ -1,0 +1,299 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container invisible" id="league-standings-header-container">
+
+  <div class="row text-center league-standings-header-row">
+    <div class="col-md-12">
+      <h2 class="text-center league-standings-header-text">Rainbow Cup Season <span id="standings-header-season-number">_</span> Standings</h2>
+    </div>
+  </div>
+
+</div>
+
+<div class="container invisible" id="league-standings-container">
+
+  <!-- league names -->
+  <div class="row text-center justify-content-lg-center league-standings-league-header-row">
+
+    <!-- league 1 -->
+    <div class="col-sm-6">
+      <h2 class="text-center league-standings-league-header-text"><span id="league-1-name"></span></h2>
+    </div>
+
+    <!-- league 2 -->
+    <div class="col-sm-6">
+      <h2 class="text-center league-standings-league-header-text"><span id="league-2-name"></span></h2>
+    </div>
+
+  </div>
+
+  <!-- league teams -->
+  <div class="row justify-content-lg-center league-standings-division-header-row">
+
+    <!-- lea1 div1 -->
+    <div class="col-sm-6" id="league-1-division-1-container">
+      <h4 class="text-center league-standings-division-header-text"><span id="league-1-division-1-name"></span></h4>
+
+      <div class="card">
+        <table class="standings-table" id="league-1-division-1-table">
+          <!-- division table header -->
+          <!--
+          <thead>
+            <th>Team</td>
+            <th>W-2-3-L</td>
+            <th>Rainbows</td>
+          </thead>
+          <tr>
+            <td>
+<span id="league-name-icon-holder">
+<span id="team-icon-container-det" class="icon-container league-icon-container text-center">
+<object type="image/svg+xml" data="../img/det.svg" id="team-icon-det" class="icon team-icon" width="25" height="25">
+</object>
+</span>
+              <span style="color:...">Team 1</span>
+            </td>
+            <td>
+              <span class="standings-w23lrecord">W-2-3-L</span>
+            </td>
+            <td>
+              <span class="standings-rainbows">0</span>
+            </td>
+          </tr>
+          -->
+        </table>
+      </div>
+    </div>
+
+
+
+    <!-- lea2 div1 -->
+    <div class="col-sm-6" id="league-2-division-1-container">
+      <h4 class="text-center league-standings-division-header-text"><span id="league-2-division-1-name"></span></h4>
+
+      <div class="card">
+        <table class="standings-table" id="league-2-division-1-table">
+          <!-- division table header -->
+          <!--
+          <thead>
+            <th>Team</td>
+            <th>W-2-3-L</td>
+            <th>Rainbows</td>
+          </thead>
+          <tr>
+            <td>
+<span id="league-name-icon-holder">
+<span id="team-icon-container-det" class="icon-container league-icon-container text-center">
+<object type="image/svg+xml" data="../img/det.svg" id="team-icon-det" class="icon team-icon" width="25" height="25">
+</object>
+</span>
+              <span style="color:...">Team 1</span>
+            </td>
+            <td>
+              <span class="standings-w23lrecord">W-2-3-L</span>
+            </td>
+            <td>
+              <span class="standings-rainbows">0</span>
+            </td>
+          </tr>
+          -->
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="row justify-content-lg-center league-standings-division-header-row">
+
+    <!-- lea1 div2 -->
+    <div class="col-sm-6" id="league-1-division-2-container">
+      <h4 class="text-center league-standings-division-header-text"><span id="league-1-division-2-name"></span></h4>
+
+      <div class="card">
+        <table class="standings-table" id="league-1-division-2-table">
+          <!-- division table header -->
+          <!--
+          <thead>
+            <th>Team</td>
+            <th>W-2-3-L</td>
+            <th>Rainbows</td>
+          </thead>
+          <tr>
+            <td>
+<span id="league-name-icon-holder">
+<span id="team-icon-container-det" class="icon-container league-icon-container text-center">
+<object type="image/svg+xml" data="../img/det.svg" id="team-icon-det" class="icon team-icon" width="25" height="25">
+</object>
+</span>
+              <span style="color:...">Team 1</span>
+            </td>
+            <td>
+              <span class="standings-w23lrecord">W-2-3-L</span>
+            </td>
+            <td>
+              <span class="standings-rainbows">0</span>
+            </td>
+          </tr>
+          -->
+        </table>
+      </div>
+    </div>
+
+
+
+    <!-- lea2 div2 -->
+    <div class="col-sm-6" id="league-2-division-2-container">
+      <h4 class="text-center league-standings-division-header-text"><span id="league-2-division-2-name"></span></h4>
+
+      <div class="card">
+        <table class="standings-table" id="league-2-division-2-table">
+          <!-- division table header -->
+          <!--
+          <thead>
+            <th>Team</td>
+            <th>W-2-3-L</td>
+            <th>Rainbows</td>
+          </thead>
+          <tr>
+            <td>
+<span id="league-name-icon-holder">
+<span id="team-icon-container-det" class="icon-container league-icon-container text-center">
+<object type="image/svg+xml" data="../img/det.svg" id="team-icon-det" class="icon team-icon" width="25" height="25">
+</object>
+</span>
+              <span style="color:...">Team 1</span>
+            </td>
+            <td>
+              <span class="standings-w23lrecord">W-2-3-L</span>
+            </td>
+            <td>
+              <span class="standings-rainbows">0</span>
+            </td>
+          </tr>
+          -->
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="row justify-content-lg-center league-standings-division-header-row">
+
+    <!-- lea1 div3 -->
+    <div class="col-sm-6" id="league-1-division-3-container">
+      <h4 class="text-center league-standings-division-header-text"><span id="league-1-division-3-name"></span></h4>
+
+      <div class="card">
+        <table class="standings-table" id="league-1-division-3-table">
+          <!-- division table header -->
+          <!--
+          <thead>
+            <th>Team</td>
+            <th>W-2-3-L</td>
+            <th>Rainbows</td>
+          </thead>
+          <tr>
+            <td>
+<span id="league-name-icon-holder">
+<span id="team-icon-container-det" class="icon-container league-icon-container text-center">
+<object type="image/svg+xml" data="../img/det.svg" id="team-icon-det" class="icon team-icon" width="25" height="25">
+</object>
+</span>
+              <span style="color:...">Team 1</span>
+            </td>
+            <td>
+              <span class="standings-w23lrecord">W-2-3-L</span>
+            </td>
+            <td>
+              <span class="standings-rainbows">0</span>
+            </td>
+          </tr>
+          -->
+        </table>
+      </div>
+    </div>
+
+
+
+    <!-- lea2 div3 -->
+    <div class="col-sm-6" id="league-2-division-3-container">
+      <h4 class="text-center league-standings-division-header-text"><span id="league-2-division-3-name"></span></h4>
+
+      <div class="card">
+        <table class="standings-table" id="league-2-division-3-table">
+          <!-- division table header -->
+          <!--
+          <thead>
+            <th>Team</td>
+            <th>W-2-3-L</td>
+            <th>Rainbows</td>
+          </thead>
+          <tr>
+            <td>
+<span id="league-name-icon-holder">
+<span id="team-icon-container-det" class="icon-container league-icon-container text-center">
+<object type="image/svg+xml" data="../img/det.svg" id="team-icon-det" class="icon team-icon" width="25" height="25">
+</object>
+</span>
+              <span style="color:...">Team 1</span>
+            </td>
+            <td>
+              <span class="standings-w23lrecord">W-2-3-L</span>
+            </td>
+            <td>
+              <span class="standings-rainbows">0</span>
+            </td>
+          </tr>
+          -->
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+
+<div class="container invisible" id="container-loading">
+
+    <div class="row text-center notify-header">
+      <div class="col-md-12">
+        <h4 class="text-success">The site is currently loading...</h4>
+      </div>
+    </div>
+
+</div>
+
+<div class="container invisible" id="container-error">
+
+    <div class="row text-center notify-header">
+      <div class="col-md-12">
+        <h2 class="text-danger">The site has experienced a technical glitch.</h2>
+      </div>
+    </div>
+
+    <div class="row text-center notify-body">
+      <div class="col-md-12">
+        <p>
+        Ninjas have been dispatched to track down those responsible for the downtime
+        and bring them back to Hellmouth Community College to fix the site.
+        </p>
+      </div>
+    </div>
+
+</div>
+
+<noscript>
+  <div class="container" id="container-noscript">
+    <div class="row text-center landing-header">
+      <div class="col-md-12">
+        <h2 class="text-danger">You must have Javascript enabled to view this site.</h2>
+      </div>
+    </div>
+  </div>
+</noscript>
+
+{% endblock %}
+{% block javascript %}
+<script type="text/javascript" src="league.js"></script>
+{% endblock %}
