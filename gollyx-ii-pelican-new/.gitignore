@@ -1,0 +1,5 @@
+pelican/output
+__pycache__
+*.pyc
+.DS_Store
+memo

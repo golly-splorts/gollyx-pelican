@@ -1,0 +1,14 @@
+#!/bin/bash
+#
+export GOLLYX_PELICAN_HOME="${HOME}/golly/pelican/gollyx-ii-pelican"
+export GOLLYX_UI_PORT="8000"
+
+export GOLLYX_BASE_UI="http://localhost:${GOLLYX_UI_PORT}"
+
+export GOLLYX_MAPS_API="https://maps.golly.life"
+
+#export GOLLYX_BASE_API="https://cloud.ii.golly456.life"
+#export GOLLYX_BASE_API="https://cloud.ii.golly.life"
+export GOLLYX_BASE_API="http://127.0.0.1:5000"
+
+
