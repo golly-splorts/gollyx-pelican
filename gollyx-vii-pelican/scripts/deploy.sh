@@ -1,7 +1,9 @@
 #!/bin/bash
 
 set -euo pipefail
+set -x
 
+GH_URL="ch4zm.github.com"
 DRY_RUN=""
 
 if [ -z ${GOLLYX_PELICAN_HOME+x} ]; then
@@ -48,12 +50,12 @@ case ${GOLLYX_STAGE} in
     ;;
 esac
 
-echo "Cloning repo github.com/golly-splorts/${REPO}"
+echo "Cloning repo ${GH_URL}/golly-splorts/${REPO}"
 
 (
 cd ${GOLLYX_PELICAN_HOME}/pelican
 rm -fr output
-git clone -b gh-pages https://github.com/golly-splorts/${REPO}.git output
+git clone -b gh-pages git@${GH_URL}:golly-splorts/${REPO}.git output
 
 rm -fr output/*
 
@@ -64,7 +66,10 @@ pelican content
 echo "Committing new content..."
 cd output
 
+# Set the username for git commit
 git config user.name "Gollyx Orchestrator"
+
+# Set the email for git commit
 git config user.email "orchestrator@golly.life"
 
 echo $DOM > CNAME
