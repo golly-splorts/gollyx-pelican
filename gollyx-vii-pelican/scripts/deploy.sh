@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -euo pipefail
-set -x
 
 GH_URL="ch4zm.github.com"
 DRY_RUN=""
