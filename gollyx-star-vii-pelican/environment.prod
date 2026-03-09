@@ -1,0 +1,10 @@
+#!/bin/bash
+
+export GOLLYX_PELICAN_HOME="${HOME}/golly/pelican/gollyx-pelican/gollyx-star-vii-pelican"
+export GOLLYX_STAGE="prod"
+
+# These read by the pelican.conf file and exposed to the pelican theme
+export GOLLYX_TLD="golly.life"
+export GOLLYX_BASE_UI="https://star.vii.${GOLLYX_TLD}"
+export GOLLYX_BASE_API="https://cloud.star.vii.${GOLLYX_TLD}"
+export GOLLYX_MAPS_API="https://maps.${GOLLYX_TLD}"
