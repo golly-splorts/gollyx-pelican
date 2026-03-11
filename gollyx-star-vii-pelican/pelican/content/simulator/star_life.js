@@ -74,8 +74,8 @@
     //s2Default: '[{"60":[60,160]},{"61":[62,162]},{"62":[59,60,63,64,65,159,160,163,164,165]}]',
 
     // Geometry:
-    defaultCols: 280,
-    defaultRows: 180,
+    defaultCols: 240,
+    defaultRows: 160,
     defaultCellSize: 3,
 
     //// Stability:
