@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+# This is machine-dependent (SSH config)
 GH_URL="ch4zm.github.com"
 DRY_RUN=""
 
@@ -65,11 +66,13 @@ pelican content
 echo "Committing new content..."
 cd output
 
-# Set the username for git commit
+# Use orchestrator credentials by default
 git config user.name "Gollyx Orchestrator"
-
-# Set the email for git commit
 git config user.email "orchestrator@golly.life"
+
+# # Switch to these credentials if local
+# git config user.name "Ch4zm of Hellmouth"
+# git config user.email "ch4zm.of.hellmouth@gmail.com"
 
 echo $DOM > CNAME
 
