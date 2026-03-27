@@ -142,8 +142,11 @@
     // information about winner/loser
     showWinnersLosers : false,
     foundVictor : false,
-    runningAvgWindow : [],
+    runningAvgWindow : null,  // Float64Array, allocated in loadConfig
     runningAvgLast3 : [0.0, 0.0, 0.0],
+    _ringIdx : 0,
+    _ringFull : false,
+    _ringSum : 0,
 
     // Clear state
     clear : {
@@ -297,12 +300,13 @@
 
       }
 
-      // Initialize the victor percent running average window array
+      // Initialize the victor percent running average window (typed array)
       var maxDim = this.ruleParams.runningAvgMaxDim;
-      // var maxDim = Math.max(2*this.columns, 2*this.rows);
-      for (var i = 0; i < maxDim; i++) {
-        this.runningAvgWindow[i] = 0;
-      }
+      this.runningAvgWindow = new Float64Array(maxDim);
+      this._ringIdx = 0;
+      this._ringFull = false;
+      this._ringSum = 0;
+      this.runningAvgLast3 = [0.0, 0.0, 0.0];
 
       // The following configuration/user variables can always be set,
       // regardless of whether in game mode, map mode, or sandbox mode
@@ -777,6 +781,8 @@
      */
     setInitialState : function() {
 
+      this.listLife.initBuffers();
+
       // state 1 parameter
       state1 = jsonParse(decodeURI(this.initialState1));
       var irow, icol, y;
@@ -812,6 +818,7 @@
      */
     cleanUp : function() {
       this.listLife.init(); // Reset/init algorithm
+      this.listLife.initBuffers();
       this.prepare();
     },
 
@@ -851,41 +858,36 @@
             }
         }
 
-        if (this.generation < maxDim) {
-          // Keep populating the window
-          this.runningAvgWindow[this.generation] = victoryPct;
-
-        } else {
-          // Push and pop newest/oldest values
-          var removed = this.runningAvgWindow.shift();
-          this.runningAvgWindow.push(victoryPct);
-
-          // compute running average
-          var sum = 0.0;
-          for (var i = 0; i < this.runningAvgWindow.length; i++) {
-            sum += this.runningAvgWindow[i];
+        // Ring buffer O(1) moving average update
+        if (!this._ringFull) {
+          // Still filling the window
+          this.runningAvgWindow[this._ringIdx] = victoryPct;
+          this._ringSum += victoryPct;
+          this._ringIdx++;
+          if (this._ringIdx >= maxDim) {
+            this._ringFull = true;
+            this._ringIdx = 0;
           }
-          var runningAvg = sum/this.runningAvgWindow.length;
+        } else {
+          // Window is full — replace oldest value
+          var oldVal = this.runningAvgWindow[this._ringIdx];
+          this.runningAvgWindow[this._ringIdx] = victoryPct;
+          this._ringSum += victoryPct - oldVal;
+          this._ringIdx = (this._ringIdx + 1) % maxDim;
+
+          var runningAvg = this._ringSum / maxDim;
 
           // update running average last 3
-          removed = this.runningAvgLast3.shift();
+          var removed = this.runningAvgLast3.shift();
           this.runningAvgLast3.push(runningAvg);
 
-          // Now run the following victory condition checks:
-          // 1. Check if last running average was zero. If running average is zero, we can't have a victor yet.
-          // 2. If running average is nonzero, check if running averages are all equal (victory by stability)
-          //
-          // Ignore case of running average of 0
-
           // Tolerance to check if running average values are zero (if so, can't stop)
-          var tolZero = this.ruleParams.tolZero; //1e-8;
+          var tolZero = this.ruleParams.tolZero;
 
           // Tolerance to check if running averages are equal (stability)
-          var tolStable = this.ruleParams.tolStable; //1e-6;
+          var tolStable = this.ruleParams.tolStable;
 
           if (!this.approxEqual(removed, 0.0, tolZero)) {
-            // Here because we have a nonzero running average (game is going), and no victor.
-            // Check if average has become stable
             var bool0eq1 = this.approxEqual(this.runningAvgLast3[0], this.runningAvgLast3[1], tolStable);
             var bool1eq2 = this.approxEqual(this.runningAvgLast3[1], this.runningAvgLast3[2], tolStable);
             var zeroCells = (liveCounts.liveCells1 === 0 || liveCounts.liveCells2 === 0);
@@ -914,7 +916,7 @@
                 }
             }
           }
-        } // end if gen > maxDim
+        } // end ring buffer update
       } // end if no victor found
     },
 
@@ -1667,211 +1669,299 @@
         this.actualState = [];
         this.actualState1 = [];
         this.actualState2 = [];
+        this._buffersReady = false;
+      },
+
+
+      /**
+       * Allocate typed-array buffers for the optimized algorithm.
+       * Must be called after GOL.columns/rows are set (i.e. in setInitialState/cleanUp).
+       */
+      initBuffers : function () {
+        var rows = GOL.rows;
+        var cols = GOL.columns;
+        var size = rows * cols;
+
+        // Double-buffered dense color grids (0=dead, 1=team1, 2=team2)
+        this.colorA = new Uint8Array(size);
+        this.colorB = new Uint8Array(size);
+        this.color = this.colorA;
+        this.useA = true;
+
+        // Live cell index lists
+        this.liveCells = new Int32Array(size);
+        this.newLiveCells = new Int32Array(size);
+        this.liveCount = 0;
+
+        // Packed neighbor counts: low 16 bits = total, high 16 bits = team1
+        this.packedNeighbors = new Uint32Array(size);
+
+        // Generation stamps for birth-candidate dedup
+        this.checkedStamp = new Uint32Array(size);
+        this._currentStamp = 1;
+
+        // Pre-computed toroidal wrapping
+        this.rowUp = new Int32Array(rows);
+        this.rowDown = new Int32Array(rows);
+        this.colLeft = new Int32Array(cols);
+        this.colRight = new Int32Array(cols);
+
+        for (var y = 0; y < rows; y++) {
+          this.rowUp[y] = y === 0 ? rows - 1 : y - 1;
+          this.rowDown[y] = y === rows - 1 ? 0 : y + 1;
+        }
+        for (var x = 0; x < cols; x++) {
+          this.colLeft[x] = x === 0 ? cols - 1 : x - 1;
+          this.colRight[x] = x === cols - 1 ? 0 : x + 1;
+        }
+
+        // Reusable result object for getLiveCounts
+        this._liveCountsResult = {liveCells: 0, liveCells1: 0, liveCells2: 0, livePct: 0};
+
+        this._cols = cols;
+        this._buffersReady = true;
       },
 
 
       getLiveCounts : function() {
-        var i, j;
+        var color = this.color;
+        var liveCells = this.liveCells;
+        var numLive = this.liveCount;
 
-        var state = GOL.listLife.actualState;
-        var liveCells = 0;
-        for (i = 0; i < state.length; i++) {
-          if ((state[i][0] >= 0) && (state[i][0] < GOL.rows)) {
-            for (j = 1; j < state[i].length; j++) {
-              if ((state[i][j] >= 0) && (state[i][j] < GOL.columns)) {
-                liveCells++;
-              }
-            }
-          }
-        }
-
-        var state1 = GOL.listLife.actualState1;
         var liveCells1 = 0;
-        for (i = 0; i < state1.length; i++) {
-          if ((state1[i][0] >= 0) && (state1[i][0] < GOL.rows)) {
-            for (j = 1; j < state1[i].length; j++) {
-              if ((state1[i][j] >= 0) && (state1[i][j] < GOL.columns)) {
-                liveCells1++;
-              }
-            }
-          }
-        }
-
-        var state2 = GOL.listLife.actualState2;
         var liveCells2 = 0;
-        for (i = 0; i < state2.length; i++) {
-          if ((state2[i][0] >= 0) && (state2[i][0] < GOL.rows)) {
-            for (j = 1; j < state2[i].length; j++) {
-              if ((state2[i][j] >= 0) && (state2[i][j] < GOL.columns)) {
-                liveCells2++;
-              }
-            }
-          }
+        for (var i = 0; i < numLive; i++) {
+          if (color[liveCells[i]] === 1) liveCells1++;
+          else liveCells2++;
         }
-
+        var total = liveCells1 + liveCells2;
         var totalArea = GOL.columns * GOL.rows;
+        var livePct = (total / totalArea) * 100.0;
 
-        var livePct = ((liveCells1 + liveCells2)/(totalArea))*100.0;
-
-        // var territory1 = liveCells1/(1.0*totalArea);
-        // territory1 = territory1 * 100;
-        // var territory2 = liveCells2/(1.0*totalArea);
-        // territory2 = territory2 * 100;
-
-        return {
-          liveCells: liveCells,
-          liveCells1 : liveCells1,
-          liveCells2 : liveCells2,
-          livePct : livePct,
-          // territory1 : territory1,
-          // territory2 : territory2,
-        };
+        var r = this._liveCountsResult;
+        r.liveCells = total;
+        r.liveCells1 = liveCells1;
+        r.liveCells2 = liveCells2;
+        r.livePct = livePct;
+        return r;
       },
 
 
+      /**
+       * Optimized three-phase nextGeneration using packed neighbor counts.
+       * Hardcodes B3/S23 rules (standard Game of Life).
+       */
       nextGeneration : function() {
-        var x, xm1, xp1, y, ym1, yp1;
-        var i, j, m, n, key, t1, t2;
-        var alive = 0, alive1 = 0, alive2 = 0;
-        var deadNeighbors;
-        var newState = [], newState1 = [], newState2 = [];
-        var allDeadNeighbors = {};
-        var allDeadNeighbors1 = {};
-        var allDeadNeighbors2 = {};
-        var neighbors, color;
+        var cols = this._cols;
+        var color = this.color;
+        var liveCells = this.liveCells;
+        var numLive = this.liveCount;
+        var rowUp = this.rowUp;
+        var rowDown = this.rowDown;
+        var colLeft = this.colLeft;
+        var colRight = this.colRight;
+        var packed = this.packedNeighbors;
+        var checkedStamp = this.checkedStamp;
+        var stamp = this._currentStamp;
         this.redrawList = [];
 
-        // iterate over each point stored in the actualState list
-        // this is the SURVIVE step
-        var y, ym1, yp1;
-        for (i = 0; i < this.actualState.length; i++) {
+        // Phase 1: Accumulate packed neighbor counts
+        // Low 16 bits = total count, high 16 bits = team1 count
+        for (var li = 0; li < numLive; li++) {
+          var idx = liveCells[li];
+          var y = (idx / cols) | 0;
+          var x = idx - y * cols;
+          var ym1Off = rowUp[y] * cols;
+          var yOff = y * cols;
+          var yp1Off = rowDown[y] * cols;
+          var xm1 = colLeft[x];
+          var xp1 = colRight[x];
 
-          y = this.actualState[i][0];
-          yp1 = this.periodicNormalizey(y+1);
-          ym1 = this.periodicNormalizey(y-1);
+          var inc = color[idx] === 1 ? 0x10001 : 1;
 
-          var x, xm1, xp1;
-          var kx, kxm1, kxp1;
-          for (j = 1; j < this.actualState[i].length; j++) {
+          packed[ym1Off + xm1] += inc;
+          packed[ym1Off + x]   += inc;
+          packed[ym1Off + xp1] += inc;
+          packed[yOff  + xm1]  += inc;
+          packed[yOff  + xp1]  += inc;
+          packed[yp1Off + xm1] += inc;
+          packed[yp1Off + x]   += inc;
+          packed[yp1Off + xp1] += inc;
+        }
 
-            x = this.actualState[i][j];
-            xp1 = this.periodicNormalizex(x+1);
-            xm1 = this.periodicNormalizex(x-1);
+        // Phase 2: Determine new state + build redrawList
+        var newColor = this.useA ? this.colorB : this.colorA;
+        var newLiveCells = this.newLiveCells;
+        var newCount = 0;
+        var redrawList = this.redrawList;
 
-            deadNeighbors = [
-              [xm1, ym1, 1], [x, ym1, 1], [xp1, ym1, 1], 
-              [xm1, y, 1], [xp1, y, 1], 
-              [xm1, yp1, 1], [x, yp1, 1], [xp1, yp1, 1]
-            ];
+        for (var li = 0; li < numLive; li++) {
+          var idx = liveCells[li];
+          var p = packed[idx];
+          var n = p & 0xFFFF;
+          var y = (idx / cols) | 0;
+          var x = idx - y * cols;
 
-            // Get number of live neighbors and remove alive neighbors from deadNeighbors
-            result = this.getNeighborsFromAlive(x, y, i, this.actualState, deadNeighbors);
-            neighbors = result['neighbors'];
-
-            // Majority wins, use color returned by getNeighborsFromAlive
-            color = result['color'];
-            if (color <= 0) {
-              // Tie, use tie-breaker rule from python
-              if (x % 2 == y % 2) {
-                  color = 1;
-              } else {
-                  color = 2;
-              }
-            }
-
-            // Iterate over each dead cell (in the vicinity of alive cells),
-            // and check how many times this dead cell shows up as a live cell neighbor.
-            // If it has the right number of neighbors, it will come to life.
-            for (m = 0; m < 8; m++) {
-
-              // If undefined, it means cell is a dead neighbor
-              if (deadNeighbors[m] !== undefined) {
-
-                var xx = deadNeighbors[m][0];
-                var yy = deadNeighbors[m][1];
-                key = xx + ',' + yy; // Create hashtable key
-
-                // count number of dead neighbors
-                if (allDeadNeighbors[key] === undefined) {
-                  allDeadNeighbors[key] = 1;
-                } else {
-                  allDeadNeighbors[key]++;
-                }
-              }
-            }
-
-            ///////////////////////////////
-            // SURVIVE counts
-
-            var cellSurvives = false;
-            var k;
-            for (k=0; k<GOL.ruleParams.s.length; k++) {
-              if (neighbors===GOL.ruleParams.s[k]) {
-                cellSurvives = true;
-              }
-            }
-
-            if (cellSurvives) {
-              // Keep cell alive
-              this.addCell(x, y, newState);
-              if (color==1) {
-                this.addCell(x, y, newState1);
-              } else if (color==2) {
-                this.addCell(x, y, newState2);
-              }
-              this.redrawList.push([x, y, 2]); // Keep alive
+          // Survive: B3/S23 — cell survives if 2 or 3 neighbors
+          if (n === 2 || n === 3) {
+            var n1 = p >>> 16;
+            var n2 = n - n1;
+            if (n1 > n2) {
+              newColor[idx] = 1;
+            } else if (n2 > n1) {
+              newColor[idx] = 2;
             } else {
-              // Kill cell
+              newColor[idx] = (x % 2 === y % 2) ? 1 : 2;
+            }
+            newLiveCells[newCount++] = idx;
+            redrawList.push([x, y, 2]); // Keep alive
+          } else {
+            redrawList.push([x, y, 0]); // Kill cell
+          }
 
-              this.redrawList.push([x, y, 0]); // Kill cell
+          // Birth: check all 8 neighbors of this live cell for dead candidates
+          var ym1Off = rowUp[y] * cols;
+          var yOff = y * cols;
+          var yp1Off = rowDown[y] * cols;
+          var xm1 = colLeft[x];
+          var xp1 = colRight[x];
+
+          var nIdx, np, nn, nn1, ny, nx;
+
+          nIdx = ym1Off + xm1;
+          if (color[nIdx] === 0 && checkedStamp[nIdx] !== stamp) {
+            checkedStamp[nIdx] = stamp;
+            np = packed[nIdx]; nn = np & 0xFFFF;
+            if (nn === 3) {
+              nn1 = np >>> 16;
+              if (nn1 > 1) { newColor[nIdx] = 1; }
+              else if (nn1 < 2) { newColor[nIdx] = 2; }
+              else { ny = (nIdx / cols) | 0; newColor[nIdx] = ((nIdx - ny * cols) % 2 === ny % 2) ? 1 : 2; }
+              newLiveCells[newCount++] = nIdx;
+              ny = rowUp[y]; nx = colLeft[x];
+              redrawList.push([nx, ny, 1]);
+            }
+          }
+
+          nIdx = ym1Off + x;
+          if (color[nIdx] === 0 && checkedStamp[nIdx] !== stamp) {
+            checkedStamp[nIdx] = stamp;
+            np = packed[nIdx]; nn = np & 0xFFFF;
+            if (nn === 3) {
+              nn1 = np >>> 16;
+              if (nn1 > 1) { newColor[nIdx] = 1; }
+              else if (nn1 < 2) { newColor[nIdx] = 2; }
+              else { ny = (nIdx / cols) | 0; newColor[nIdx] = ((nIdx - ny * cols) % 2 === ny % 2) ? 1 : 2; }
+              newLiveCells[newCount++] = nIdx;
+              ny = rowUp[y];
+              redrawList.push([x, ny, 1]);
+            }
+          }
+
+          nIdx = ym1Off + xp1;
+          if (color[nIdx] === 0 && checkedStamp[nIdx] !== stamp) {
+            checkedStamp[nIdx] = stamp;
+            np = packed[nIdx]; nn = np & 0xFFFF;
+            if (nn === 3) {
+              nn1 = np >>> 16;
+              if (nn1 > 1) { newColor[nIdx] = 1; }
+              else if (nn1 < 2) { newColor[nIdx] = 2; }
+              else { ny = (nIdx / cols) | 0; newColor[nIdx] = ((nIdx - ny * cols) % 2 === ny % 2) ? 1 : 2; }
+              newLiveCells[newCount++] = nIdx;
+              ny = rowUp[y]; nx = colRight[x];
+              redrawList.push([nx, ny, 1]);
+            }
+          }
+
+          nIdx = yOff + xm1;
+          if (color[nIdx] === 0 && checkedStamp[nIdx] !== stamp) {
+            checkedStamp[nIdx] = stamp;
+            np = packed[nIdx]; nn = np & 0xFFFF;
+            if (nn === 3) {
+              nn1 = np >>> 16;
+              if (nn1 > 1) { newColor[nIdx] = 1; }
+              else if (nn1 < 2) { newColor[nIdx] = 2; }
+              else { ny = (nIdx / cols) | 0; newColor[nIdx] = ((nIdx - ny * cols) % 2 === ny % 2) ? 1 : 2; }
+              newLiveCells[newCount++] = nIdx;
+              nx = colLeft[x];
+              redrawList.push([nx, y, 1]);
+            }
+          }
+
+          nIdx = yOff + xp1;
+          if (color[nIdx] === 0 && checkedStamp[nIdx] !== stamp) {
+            checkedStamp[nIdx] = stamp;
+            np = packed[nIdx]; nn = np & 0xFFFF;
+            if (nn === 3) {
+              nn1 = np >>> 16;
+              if (nn1 > 1) { newColor[nIdx] = 1; }
+              else if (nn1 < 2) { newColor[nIdx] = 2; }
+              else { ny = (nIdx / cols) | 0; newColor[nIdx] = ((nIdx - ny * cols) % 2 === ny % 2) ? 1 : 2; }
+              newLiveCells[newCount++] = nIdx;
+              nx = colRight[x];
+              redrawList.push([nx, y, 1]);
+            }
+          }
+
+          nIdx = yp1Off + xm1;
+          if (color[nIdx] === 0 && checkedStamp[nIdx] !== stamp) {
+            checkedStamp[nIdx] = stamp;
+            np = packed[nIdx]; nn = np & 0xFFFF;
+            if (nn === 3) {
+              nn1 = np >>> 16;
+              if (nn1 > 1) { newColor[nIdx] = 1; }
+              else if (nn1 < 2) { newColor[nIdx] = 2; }
+              else { ny = (nIdx / cols) | 0; newColor[nIdx] = ((nIdx - ny * cols) % 2 === ny % 2) ? 1 : 2; }
+              newLiveCells[newCount++] = nIdx;
+              ny = rowDown[y]; nx = colLeft[x];
+              redrawList.push([nx, ny, 1]);
+            }
+          }
+
+          nIdx = yp1Off + x;
+          if (color[nIdx] === 0 && checkedStamp[nIdx] !== stamp) {
+            checkedStamp[nIdx] = stamp;
+            np = packed[nIdx]; nn = np & 0xFFFF;
+            if (nn === 3) {
+              nn1 = np >>> 16;
+              if (nn1 > 1) { newColor[nIdx] = 1; }
+              else if (nn1 < 2) { newColor[nIdx] = 2; }
+              else { ny = (nIdx / cols) | 0; newColor[nIdx] = ((nIdx - ny * cols) % 2 === ny % 2) ? 1 : 2; }
+              newLiveCells[newCount++] = nIdx;
+              ny = rowDown[y];
+              redrawList.push([x, ny, 1]);
+            }
+          }
+
+          nIdx = yp1Off + xp1;
+          if (color[nIdx] === 0 && checkedStamp[nIdx] !== stamp) {
+            checkedStamp[nIdx] = stamp;
+            np = packed[nIdx]; nn = np & 0xFFFF;
+            if (nn === 3) {
+              nn1 = np >>> 16;
+              if (nn1 > 1) { newColor[nIdx] = 1; }
+              else if (nn1 < 2) { newColor[nIdx] = 2; }
+              else { ny = (nIdx / cols) | 0; newColor[nIdx] = ((nIdx - ny * cols) % 2 === ny % 2) ? 1 : 2; }
+              newLiveCells[newCount++] = nIdx;
+              ny = rowDown[y]; nx = colRight[x];
+              redrawList.push([nx, ny, 1]);
             }
           }
         }
 
-        // Iterate over dead neighbors and determine if any will be born
-        // (allDeadNeighbors only contains cells not in deadWait)
-        // This is the birth step
-        for (key in allDeadNeighbors) {
-
-          var neighbors = allDeadNeighbors[key];
-
-          /////////////////////////////////
-          // BIRTH counts
-          //
-          // check birth rule
-          var cellBorn = false;
-          var k;
-          for (k=0; k<GOL.ruleParams.b.length; k++) {
-            if (neighbors==GOL.ruleParams.b[k]) {
-              cellBorn = true;
-            }
-          }
-          if (cellBorn) {
-            // This cell is dead, and not deadWait,
-            // and it has enough alive neighbors to be born.
-            key = key.split(',');
-
-            // Parse the (x, y) values of the birthed cell
-            t1 = parseInt(key[0], 10);
-            t2 = parseInt(key[1], 10);
-
-            // Get color of (x, y) cell
-            color = this.getColorFromAlive(t1, t2);
-
-            this.addCell(t1, t2, newState);
-            if (color == 1) {
-              this.addCell(t1, t2, newState1);
-            } else if (color == 2) {
-              this.addCell(t1, t2, newState2);
-            }
-
-            this.redrawList.push([t1, t2, 1]);
-          }
+        // Phase 3: Cleanup and swap
+        packed.fill(0);
+        for (var li = 0; li < numLive; li++) {
+          color[liveCells[li]] = 0;
         }
+        this._currentStamp = stamp + 1;
 
-        this.actualState = newState;
-        this.actualState1 = newState1;
-        this.actualState2 = newState2;
+        // Swap color buffer pointers and live cell list pointers
+        this.color = newColor;
+        this.useA = !this.useA;
+        this.liveCells = newLiveCells;
+        this.newLiveCells = liveCells;
+        this.liveCount = newCount;
 
         return this.getLiveCounts();
       },
@@ -1897,384 +1987,15 @@
       },
 
 
-      topPointer : 1,
-      middlePointer : 1,
-      bottomPointer : 1,
-
-      getColorFromAlive : function(x, y) {
-        var state1 = this.actualState1;
-        var state2 = this.actualState2;
-
-        var color1 = 0;
-        var color2 = 0;
-
-        // Loop points back around
-        x = (x + GOL.columns)%(GOL.columns);
-        y = (y + GOL.rows)%(GOL.rows);
-
-        var xm1 = ((x-1) + GOL.columns)%(GOL.columns);
-        var xp1 = ((x+1) + GOL.columns)%(GOL.columns);
-
-        var ym1 = ((y-1) + GOL.rows)%(GOL.rows);
-        var yp1 = ((y+1) + GOL.rows)%(GOL.rows);
-
-        // color1
-        for (i = 0; i < state1.length; i++) {
-          var yy = state1[i][0];
-
-          if (yy === ym1) {
-
-            // legacy of klein
-            var xm1_, x_, xp1_;
-            xm1_ = xm1;
-            x_ = x;
-            xp1_ = xp1;
-
-            // Top row
-            for (j = 1; j < state1[i].length; j++) {
-              var xx = state1[i][j];
-
-              if (xx === xm1_) {
-                // top left
-                color1++;
-              } else if (xx === x_) {
-                // top middle
-                color1++;
-              } else if (xx === xp1_) {
-                // top right
-                color1++;
-              }
-            }
-
-          } else if (yy === y) {
-            // Middle row
-            for (j = 1; j < state1[i].length; j++) {
-              var xx = state1[i][j];
-              if (xx === xm1) {
-                // top left
-                color1++;
-              } else if (xx === xp1) {
-                // top right
-                color1++;
-              }
-            }
-
-          } else if (yy === yp1) {
-
-            var xm1_, x_, xp1_;
-            xm1_ = xm1;
-            x_ = x;
-            xp1_ = xp1;
-
-            // Bottom row
-            for (j = 1; j < state1[i].length; j++) {
-              var xx = state1[i][j];
-              if (xx === xm1_) {
-                // bottom left
-                color1++;
-              } else if (xx === x_) {
-                // bottom middle
-                color1++;
-              } else if (xx === xp1_) {
-                // bottom right
-                color1++;
-              }
-            }
-          }
-
-        }
-
-        // color2
-        for (i = 0; i < state2.length; i++) {
-          var yy = state2[i][0];
-
-          if (yy === ym1) {
-
-            var xm1_, x_, xp1_;
-            xm1_ = xm1;
-            x_ = x;
-            xp1_ = xp1;
-
-            // Top row
-            for (j = 1; j < state2[i].length; j++) {
-              var xx = state2[i][j];
-              if (xx === xm1) {
-                // top left
-                color2++;
-              } else if (xx === x) {
-                // top middle
-                color2++;
-              } else if (xx === xp1) {
-                // top right
-                color2++;
-              }
-            }
-
-          } else if (yy === y) {
-            // Middle row
-            for (j = 1; j < state2[i].length; j++) {
-              var xx = state2[i][j];
-              if (xx === xm1) {
-                // left
-                color2++;
-              } else if (xx === xp1) {
-                // right
-                color2++;
-              }
-            }
-
-          } else if (yy === yp1) {
-
-            var xm1_, x_, xp1_;
-            var xm1_, x_, xp1_;
-            xm1_ = xm1;
-            x_ = x;
-            xp1_ = xp1;
-
-            // Bottom row
-            for (j = 1; j < state2[i].length; j++) {
-              var xx = state2[i][j];
-              if (xx === xm1_) {
-                // bottom left
-                color2++;
-              } else if (xx === x_) {
-                // bottom middle
-                color2++;
-              } else if (xx === xp1_) {
-                // bottom right
-                color2++;
-              }
-            }
-          }
-
-        }
-
-        if (color1 > color2) {
-          return 1;
-        } else if (color2 > color1) {
-          return 2;
-        } else {
-          // Checkerboard tiebreak (matches Python implementation)
-          return (x % 2 === y % 2) ? 1 : 2;
-        }
-      },
-
-      /**
-       *
-       */
-      getNeighborsFromAlive : function (x, y, i, state, possibleNeighborsList) {
-
-        // Loop points back around
-        x = (x + GOL.columns)%(GOL.columns);
-        y = (y + GOL.rows)%(GOL.rows);
-
-        var xm1 = ((x-1) + GOL.columns)%(GOL.columns);
-        var xp1 = ((x+1) + GOL.columns)%(GOL.columns);
-
-        var ym1 = ((y-1) + GOL.rows)%(GOL.rows);
-        var yp1 = ((y+1) + GOL.rows)%(GOL.rows);
-
-        var neighbors = 0, k;
-        var neighbors1 = 0, neighbors2 = 0;
-
-        // Top
-        var im1 = i-1;
-        if (im1 < 0) {
-          im1 = state.length-1;
-        }
-        if (state[im1] !== undefined) {
-          if (state[im1][0] === ym1) {
-
-            var xm1_, x_, xp1_;
-            xm1_ = xm1;
-            x_ = x;
-            xp1_ = xp1;
-
-            for (k = 1; k < state[im1].length; k++) {
-
-              // NW
-              if (state[im1][k] === xm1_) {
-                possibleNeighborsList[0] = undefined;
-                //this.topPointer = k + 1;
-                neighbors++;
-                var xx = state[im1][k];
-                var yy = state[im1][0];
-                var cellcol = this.getCellColor(xx, yy);
-                if (cellcol === 1) {
-                  neighbors1++;
-                } else if (cellcol === 2) {
-                  neighbors2++;
-                }
-              }
-
-              // N
-              if (state[im1][k] === x_) {
-                possibleNeighborsList[1] = undefined;
-                //this.topPointer = k;
-                neighbors++;
-                var xx = state[im1][k];
-                var yy = state[im1][0];
-                var cellcol = this.getCellColor(xx, yy);
-                if (cellcol === 1) {
-                  neighbors1++;
-                } else if (cellcol === 2) {
-                  neighbors2++;
-                }
-              }
-
-              // NE
-              if (state[im1][k] === xp1_) {
-                possibleNeighborsList[2] = undefined;
-
-                neighbors++;
-                var xx = state[im1][k];
-                var yy = state[im1][0];
-                var cellcol = this.getCellColor(xx, yy);
-                if (cellcol == 1) {
-                  neighbors1++;
-                } else if (cellcol == 2) {
-                  neighbors2++;
-                }
-              }
-            }
-
-          }
-        }
-
-        // Middle
-        for (k = 1; k < state[i].length; k++) {
-
-          if (state[i][k] === xm1) {
-            possibleNeighborsList[3] = undefined;
-            neighbors++;
-            var xx = state[i][k];
-            var yy = state[i][0];
-            var cellcol = this.getCellColor(xx, yy);
-            if (cellcol == 1) {
-              neighbors1++;
-            } else if (cellcol == 2) {
-              neighbors2++;
-            }
-          }
-
-          if (state[i][k] === xp1) {
-            possibleNeighborsList[4] = undefined;
-            neighbors++;
-            var xx = state[i][k];
-            var yy = state[i][0];
-            var cellcol = this.getCellColor(xx, yy);
-            if (cellcol == 1) {
-              neighbors1++;
-            } else if (cellcol == 2) {
-              neighbors2++;
-            }
-          }
-
-        }
-
-        // Bottom
-        var ip1 = i+1;
-        if ((ip1) >= state.length) {
-          ip1 = 0;
-        }
-        if (state[ip1] !== undefined) {
-          if (state[ip1][0] === yp1) {
-
-            var xm1_, x_, xp1_;
-            xm1_ = xm1;
-            x_ = x;
-            xp1_ = xp1;
-
-            for (k = 1; k < state[ip1].length; k++) {
-
-              if (state[ip1][k] === xm1_) {
-                possibleNeighborsList[5] = undefined;
-                neighbors++;
-                var xx = state[ip1][k];
-                var yy = state[ip1][0];
-                var cellcol = this.getCellColor(xx, yy);
-                if (cellcol == 1) {
-                  neighbors1++;
-                } else if (cellcol == 2) {
-                  neighbors2++;
-                }
-              }
-
-              if (state[ip1][k] === x_) {
-                possibleNeighborsList[6] = undefined;
-                neighbors++;
-                var xx = state[ip1][k];
-                var yy = state[ip1][0];
-                var cellcol = this.getCellColor(xx, yy);
-                if (cellcol == 1) {
-                  neighbors1++;
-                } else if (cellcol == 2) {
-                  neighbors2++;
-                }
-              }
-
-              if (state[ip1][k] === xp1_) {
-                possibleNeighborsList[7] = undefined;
-
-                neighbors++;
-                var xx = state[ip1][k];
-                var yy = state[ip1][0];
-                var cellcol = this.getCellColor(xx, yy);
-                if (cellcol == 1) {
-                  neighbors1++;
-                } else if (cellcol == 2) {
-                  neighbors2++;
-                }
-              }
-
-            }
-          }
-        }
-
-        var color;
-        if (neighbors1 > neighbors2) {
-          color = 1;
-        } else if (neighbors2 > neighbors1) {
-          color = 2;
-        } else {
-          if (x%2==y%2) {
-            color = 1;
-          } else {
-            color = 2;
-          }
-        }
-
-        //return neighbors;
-        return {
-          neighbors: neighbors,
-          color: color
-        }
-      },
 
 
       /**
        * Check if the cell at location (x, y) is alive
        */
       isAlive : function(x, y) {
-
-        // Loop points back around
-        x = (x + GOL.columns)%(GOL.columns);
-        y = (y + GOL.rows)%(GOL.rows);
-
-        var i, j;
-
-        for (i = 0; i < this.actualState.length; i++) {
-          // check that first coordinate in actualState matches
-          if (this.actualState[i][0] === y) {
-            for (j = 1; j < this.actualState[i].length; j++) {
-              // check that second coordinate in actualState matches
-              if (this.actualState[i][j] === x) {
-                return true;
-              }
-            }
-          }
-        }
-        return false;
+        x = this.periodicNormalizex(x);
+        y = this.periodicNormalizey(y);
+        return this.color[y * this._cols + x] !== 0;
       },
 
       /**
@@ -2282,54 +2003,39 @@
        * (assumes cell is alive, returns 0 if cell was not found)
        */
       getCellColor : function(x, y) {
-        // periodic grid: loop points back around
-        var x = this.periodicNormalizex(x);
-        var y = this.periodicNormalizey(y);
-
-        for (i = 0; i < this.actualState1.length; i++) {
-          if (this.actualState1[i][0] === y) {
-            for (j = 1; j < this.actualState1[i].length; j++) {
-              if (this.actualState1[i][j] === x) {
-                return 1;
-              }
-            }
-          }
-        }
-        for (i = 0; i < this.actualState2.length; i++) {
-          if (this.actualState2[i][0] === y) {
-            for (j = 1; j < this.actualState2[i].length; j++) {
-              if (this.actualState2[i][j] === x) {
-                return 2;
-              }
-            }
-          }
-        }
-        return 0;
+        x = this.periodicNormalizex(x);
+        y = this.periodicNormalizey(y);
+        return this.color[y * this._cols + x];
       },
 
       /**
        *
        */
       removeCell : function(x, y, state) {
+        x = this.periodicNormalizex(x);
+        y = this.periodicNormalizey(y);
+        var idx = y * this._cols + x;
 
-        // Periodic grid
-        var x = this.periodicNormalizex(x);
-        var y = this.periodicNormalizey(y);
-
-        var i, j;
-
-        for (i = 0; i < state.length; i++) {
-          if (state[i][0] === y) {
-            if (state[i].length === 2) { // Remove all Row
-              state.splice(i, 1);
-            } else { // Remove Element
-              for (j = 1; j < state[i].length; j++) {
-                if (state[i][j] === x) {
-                  state[i].splice(j, 1);
-                  return;
-                }
+        if (state === this.actualState) {
+          // Remove from live cell list and clear color
+          if (this.color[idx] !== 0) {
+            this.color[idx] = 0;
+            // Remove from liveCells by scanning for idx
+            for (var i = 0; i < this.liveCount; i++) {
+              if (this.liveCells[i] === idx) {
+                this.liveCells[i] = this.liveCells[this.liveCount - 1];
+                this.liveCount--;
+                break;
               }
             }
+          }
+        } else if (state === this.actualState1) {
+          if (this.color[idx] === 1) {
+            this.color[idx] = 0;
+          }
+        } else if (state === this.actualState2) {
+          if (this.color[idx] === 2) {
+            this.color[idx] = 0;
           }
         }
       },
@@ -2339,81 +2045,19 @@
        *
        */
       addCell : function(x, y, state) {
-
-        // Loop points back around
         x = this.periodicNormalizex(x);
         y = this.periodicNormalizey(y);
+        var idx = y * this._cols + x;
 
-        if (state.length === 0) {
-          state.push([y, x]);
-          return;
-        }
-
-        var k, n, m, tempRow, newState = [], added;
-
-        // figure out where in the list to insert the new cell
-        if (y < state[0][0]) {
-          // handle case of y < any other y, so add to beginning of list
-
-          // set first element of newState and bump everybody else by 1
-          newState = [[y,x]];
-          for (k = 0; k < state.length; k++) {
-            newState[k+1] = state[k];
+        if (state === this.actualState) {
+          // Add to live cell list if not already alive
+          if (this.color[idx] === 0) {
+            this.liveCells[this.liveCount++] = idx;
           }
-
-          // copy newState to state
-          for (k = 0; k < newState.length; k++) {
-            state[k] = newState[k];
-          }
-
-          return;
-
-        } else if (y > state[state.length - 1][0]) {
-          // handle case of y > any other y, so add to end
-          state[state.length] = [y, x];
-          return;
-
-        } else { // Add to Middle
-
-          for (n = 0; n < state.length; n++) {
-            if (state[n][0] === y) { // Level Exists
-              tempRow = [];
-              added = false;
-              for (m = 1; m < state[n].length; m++) {
-                if ((!added) && (x < state[n][m])) {
-                  tempRow.push(x);
-                  added = !added;
-                }
-                tempRow.push(state[n][m]);
-              }
-              tempRow.unshift(y);
-              if (!added) {
-                tempRow.push(x);
-              }
-              state[n] = tempRow;
-              return;
-            }
-
-            if (y < state[n][0]) { // Create Level
-              newState = [];
-              for (k = 0; k < state.length; k++) {
-                if (k === n) {
-                  newState[k] = [y,x];
-                  newState[k+1] = state[k];
-                } else if (k < n) {
-                  newState[k] = state[k];
-                } else if (k > n) {
-                  newState[k+1] = state[k];
-                }
-              }
-
-              for (k = 0; k < newState.length; k++) {
-                state[k] = newState[k];
-              }
-
-              return;
-            }
-          }
+        } else if (state === this.actualState1) {
+          this.color[idx] = 1;
+        } else if (state === this.actualState2) {
+          this.color[idx] = 2;
         }
       }
 
