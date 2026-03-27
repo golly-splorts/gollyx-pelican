@@ -142,8 +142,11 @@
     // information about winner/loser
     showWinnersLosers : false,
     foundVictor : false,
-    runningAvgWindow : [],
+    runningAvgWindow : null,  // Float64Array, allocated in loadConfig
     runningAvgLast3 : [0.0, 0.0, 0.0],
+    _ringIdx : 0,
+    _ringFull : false,
+    _ringSum : 0,
 
     // Clear state
     clear : {
@@ -297,12 +300,13 @@
 
       }
 
-      // Initialize the victor percent running average window array
+      // Initialize the victor percent running average window (typed array)
       var maxDim = this.ruleParams.runningAvgMaxDim;
-      // var maxDim = Math.max(2*this.columns, 2*this.rows);
-      for (var i = 0; i < maxDim; i++) {
-        this.runningAvgWindow[i] = 0;
-      }
+      this.runningAvgWindow = new Float64Array(maxDim);
+      this._ringIdx = 0;
+      this._ringFull = false;
+      this._ringSum = 0;
+      this.runningAvgLast3 = [0.0, 0.0, 0.0];
 
       // The following configuration/user variables can always be set,
       // regardless of whether in game mode, map mode, or sandbox mode
@@ -854,41 +858,36 @@
             }
         }
 
-        if (this.generation < maxDim) {
-          // Keep populating the window
-          this.runningAvgWindow[this.generation] = victoryPct;
-
-        } else {
-          // Push and pop newest/oldest values
-          var removed = this.runningAvgWindow.shift();
-          this.runningAvgWindow.push(victoryPct);
-
-          // compute running average
-          var sum = 0.0;
-          for (var i = 0; i < this.runningAvgWindow.length; i++) {
-            sum += this.runningAvgWindow[i];
+        // Ring buffer O(1) moving average update
+        if (!this._ringFull) {
+          // Still filling the window
+          this.runningAvgWindow[this._ringIdx] = victoryPct;
+          this._ringSum += victoryPct;
+          this._ringIdx++;
+          if (this._ringIdx >= maxDim) {
+            this._ringFull = true;
+            this._ringIdx = 0;
           }
-          var runningAvg = sum/this.runningAvgWindow.length;
+        } else {
+          // Window is full — replace oldest value
+          var oldVal = this.runningAvgWindow[this._ringIdx];
+          this.runningAvgWindow[this._ringIdx] = victoryPct;
+          this._ringSum += victoryPct - oldVal;
+          this._ringIdx = (this._ringIdx + 1) % maxDim;
+
+          var runningAvg = this._ringSum / maxDim;
 
           // update running average last 3
-          removed = this.runningAvgLast3.shift();
+          var removed = this.runningAvgLast3.shift();
           this.runningAvgLast3.push(runningAvg);
 
-          // Now run the following victory condition checks:
-          // 1. Check if last running average was zero. If running average is zero, we can't have a victor yet.
-          // 2. If running average is nonzero, check if running averages are all equal (victory by stability)
-          //
-          // Ignore case of running average of 0
-
           // Tolerance to check if running average values are zero (if so, can't stop)
-          var tolZero = this.ruleParams.tolZero; //1e-8;
+          var tolZero = this.ruleParams.tolZero;
 
           // Tolerance to check if running averages are equal (stability)
-          var tolStable = this.ruleParams.tolStable; //1e-6;
+          var tolStable = this.ruleParams.tolStable;
 
           if (!this.approxEqual(removed, 0.0, tolZero)) {
-            // Here because we have a nonzero running average (game is going), and no victor.
-            // Check if average has become stable
             var bool0eq1 = this.approxEqual(this.runningAvgLast3[0], this.runningAvgLast3[1], tolStable);
             var bool1eq2 = this.approxEqual(this.runningAvgLast3[1], this.runningAvgLast3[2], tolStable);
             var zeroCells = (liveCounts.liveCells1 === 0 || liveCounts.liveCells2 === 0);
@@ -917,7 +916,7 @@
                 }
             }
           }
-        } // end if gen > maxDim
+        } // end ring buffer update
       } // end if no victor found
     },
 
