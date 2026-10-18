@@ -78,6 +78,8 @@
     cellSize: 0,
 
     waitTimeMs: 0,
+    // Hyper speed: generations run back to back per tick of the run loop
+    hyperGenerations: 3,
     generation : 0,
 
     running : false,
@@ -1093,6 +1095,34 @@
      */
     nextStep : function() {
 
+      // Hyper speed runs hyperGenerations generations per tick, other speeds run one
+      var n = 0;
+      do {
+        GOL.runGeneration();
+        n++;
+      } while (GOL.running && GOL.helpers.isHyper() && n < GOL.hyperGenerations);
+
+      var v = this.helpers.getWaitTimeMs();
+
+      // Sleepy time before going on to next step
+      setTimeout(() => {
+        // Flow Control
+        if (GOL.running) {
+          GOL.nextStep();
+        } else {
+          if (GOL.clear.schedule) {
+            GOL.cleanUp();
+          }
+        }
+      }, v);
+
+    },
+
+    /**
+     * Run one generation: algorithm, canvas, statistics, victory check
+     */
+    runGeneration : function() {
+
       var i, x, y, r;
       var liveCellNumbers, liveCellNumber, liveCellNumber1, liveCellNumber2;
       var algorithmTime, guiTime;
@@ -1172,20 +1202,6 @@
       r = 1.0/GOL.generation;
       GOL.times.algorithm = (GOL.times.algorithm * (1 - r)) + (algorithmTime * r);
       GOL.times.gui = (GOL.times.gui * (1 - r)) + (guiTime * r);
-
-      var v = this.helpers.getWaitTimeMs();
-
-      // Sleepy time before going on to next step
-      setTimeout(() => {
-        // Flow Control
-        if (GOL.running) {
-          GOL.nextStep();
-        } else {
-          if (GOL.clear.schedule) {
-            GOL.cleanUp();
-          }
-        }
-      }, v);
 
     },
 
@@ -1276,10 +1292,11 @@
         } else if (event.keyCode === 70 ) { // Key: F
           var speed = GOL.element.speedSlider.value;
           speed = speed - 1;
-          if (speed===0) {
+          if (speed < 0) {
             speed = 4;
           }
           GOL.element.speedSlider.value = speed;
+          GOL.handlers.buttons.speedControl();
 
         } else if (event.keyCode === 71 ) { // Key: G
           GOL.handlers.buttons.grid();
@@ -1415,10 +1432,20 @@
          * Update simulation speed
          */
         speedControl : function() {
-          // We don't need to do anything with the
-          // speed slider value here.
           // The getWaitTimeMs function will read
           // the value of the speed slider directly.
+          // Here we only switch the slider and label into the Hyper style.
+          var label = document.getElementById('speed-label-fast');
+          var slider = GOL.element.speedSlider;
+          if (GOL.helpers.isHyper()) {
+            label.innerHTML = 'HYPER';
+            label.classList.add('hyper');
+            slider.classList.add('hyper');
+          } else {
+            label.innerHTML = '<u>F</u>aster';
+            label.classList.remove('hyper');
+            slider.classList.remove('hyper');
+          }
         },
 
       },
@@ -2212,6 +2239,17 @@
         y = Math.ceil(((posy - domObject.pageTop)/cellSize) - 1);
 
         return [x, y];
+      },
+
+      /**
+       * Hyper speed is the leftmost slider position (0)
+       */
+      isHyper : function () {
+        try {
+          return GOL.element.speedSlider.value == 0;
+        } catch {
+          return false;
+        }
       },
 
       getWaitTimeMs : function () {
