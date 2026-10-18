@@ -1701,6 +1701,18 @@
         this.checkedStamp = new Uint32Array(size);
         this._currentStamp = 1;
 
+        // Cell weights: how many times each live cell counts (dead cells hold 1).
+        // Above 1 only for cells listed more than once in the initial conditions:
+        // the old list-based engine (and gollyx-python) kept one entry per listing.
+        this.weight = new Uint8Array(size).fill(1);
+
+        // Split cells: listed for both teams in the initial conditions. They draw
+        // as team 1 and count as team 1 neighbors for survival color, but their
+        // team 2 listings count as team 2 for live counts and birth color.
+        // They resolve to one team after the first generation.
+        this.split2 = new Uint8Array(size);  // team 2 listings of each split cell
+        this.splitCells = [];
+
         // Pre-computed toroidal wrapping
         this.rowUp = new Int32Array(rows);
         this.rowDown = new Int32Array(rows);
@@ -1726,14 +1738,22 @@
 
       getLiveCounts : function() {
         var color = this.color;
+        var weight = this.weight;
         var liveCells = this.liveCells;
         var numLive = this.liveCount;
 
         var liveCells1 = 0;
         var liveCells2 = 0;
         for (var i = 0; i < numLive; i++) {
-          if (color[liveCells[i]] === 1) liveCells1++;
-          else liveCells2++;
+          var idx = liveCells[i];
+          if (color[idx] === 1) liveCells1 += weight[idx];
+          else liveCells2 += weight[idx];
+        }
+        // Split cells were counted as team 1 above; move their team 2 listings
+        for (var s = 0; s < this.splitCells.length; s++) {
+          var k = this.split2[this.splitCells[s]];
+          liveCells1 -= k;
+          liveCells2 += k;
         }
         var total = liveCells1 + liveCells2;
         var totalArea = GOL.columns * GOL.rows;
@@ -1764,6 +1784,8 @@
         var packed = this.packedNeighbors;
         var checkedStamp = this.checkedStamp;
         var stamp = this._currentStamp;
+        var weight = this.weight;
+        var splitCells = this.splitCells;
         this.redrawList = [];
 
         // Phase 1: Accumulate packed neighbor counts
@@ -1778,7 +1800,7 @@
           var xm1 = colLeft[x];
           var xp1 = colRight[x];
 
-          var inc = color[idx] === 1 ? 0x10001 : 1;
+          var inc = (color[idx] === 1 ? 0x10001 : 1) * weight[idx];
 
           packed[ym1Off + xm1] += inc;
           packed[ym1Off + x]   += inc;
@@ -1788,6 +1810,25 @@
           packed[yp1Off + xm1] += inc;
           packed[yp1Off + x]   += inc;
           packed[yp1Off + xp1] += inc;
+        }
+
+        // Split cells: take their team 2 listings back out of the team 1 count
+        // of dead neighbors (birth color). Live neighbors keep the survival count.
+        for (var si = 0; si < splitCells.length; si++) {
+          var sIdx = splitCells[si];
+          var k2 = this.split2[sIdx] * 0x10000;
+          var sy = (sIdx / cols) | 0;
+          var sx = sIdx - sy * cols;
+          var sNeighbors = [
+            rowUp[sy] * cols + colLeft[sx], rowUp[sy] * cols + sx, rowUp[sy] * cols + colRight[sx],
+            sy * cols + colLeft[sx], sy * cols + colRight[sx],
+            rowDown[sy] * cols + colLeft[sx], rowDown[sy] * cols + sx, rowDown[sy] * cols + colRight[sx]
+          ];
+          for (var m = 0; m < 8; m++) {
+            if (color[sNeighbors[m]] === 0) {
+              packed[sNeighbors[m]] -= k2;
+            }
+          }
         }
 
         // Phase 2: Determine new state + build redrawList
@@ -1817,6 +1858,7 @@
             newLiveCells[newCount++] = idx;
             redrawList.push([x, y, 2]); // Keep alive
           } else {
+            weight[idx] = 1; // Dead cells hold weight 1, so births start at 1
             redrawList.push([x, y, 0]); // Kill cell
           }
 
@@ -1957,6 +1999,12 @@
         }
         this._currentStamp = stamp + 1;
 
+        // Split cells have resolved to one team
+        for (var si = 0; si < splitCells.length; si++) {
+          this.split2[splitCells[si]] = 0;
+        }
+        this.splitCells = [];
+
         // Swap color buffer pointers and live cell list pointers
         this.color = newColor;
         this.useA = !this.useA;
@@ -2018,9 +2066,11 @@
         var idx = y * this._cols + x;
 
         if (state === this.actualState) {
-          // Remove from live cell list and clear color
+          // Remove from live cell list and clear color (whole cell, any weight)
           if (this.color[idx] !== 0) {
             this.color[idx] = 0;
+            this.weight[idx] = 1;
+            this.split2[idx] = 0;
             // Remove from liveCells by scanning for idx
             for (var i = 0; i < this.liveCount; i++) {
               if (this.liveCells[i] === idx) {
@@ -2033,6 +2083,7 @@
         } else if (state === this.actualState1) {
           if (this.color[idx] === 1) {
             this.color[idx] = 0;
+            this.split2[idx] = 0;
           }
         } else if (state === this.actualState2) {
           if (this.color[idx] === 2) {
@@ -2051,14 +2102,26 @@
         var idx = y * this._cols + x;
 
         if (state === this.actualState) {
-          // Add to live cell list if not already alive
           if (this.color[idx] === 0) {
+            // Add to live cell list if not already alive
             this.liveCells[this.liveCount++] = idx;
+            this.weight[idx] = 1;
+          } else {
+            // Listed again in the initial conditions: count it again
+            this.weight[idx]++;
           }
         } else if (state === this.actualState1) {
           this.color[idx] = 1;
         } else if (state === this.actualState2) {
-          this.color[idx] = 2;
+          if (this.color[idx] === 1) {
+            // Listed for both teams: stays team 1, track the team 2 listing
+            if (this.split2[idx] === 0) {
+              this.splitCells.push(idx);
+            }
+            this.split2[idx]++;
+          } else {
+            this.color[idx] = 2;
+          }
         }
       }
 
