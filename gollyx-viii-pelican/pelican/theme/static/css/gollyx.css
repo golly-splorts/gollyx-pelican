@@ -358,6 +358,11 @@ div.league-container, div#ws-league-container { margin-top: 24px; }
   background: currentColor;
 }
 
+.game-card-lost .team-swatch {
+  background: transparent;
+  border: 2px solid currentColor;
+}
+
 .game-card-team-name {
   flex: 1;
   min-width: 0;
