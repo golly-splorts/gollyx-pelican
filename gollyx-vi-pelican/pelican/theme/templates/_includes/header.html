@@ -1,0 +1,25 @@
+    {% block head %}
+    <title>{{ SITENAME }}</title>
+    <meta charset="utf-8" />
+
+    <script>
+        var baseUIUrl  = '{{ GOLLYX_BASE_UI  }}';
+        var baseApiUrl = '{{ GOLLYX_BASE_API }}';
+        var mapsApiUrl = '{{ GOLLYX_MAPS_API }}';
+    </script>
+
+    <!--
+    CSS styles
+    -->
+    <link href="{{ SITEURL }}/theme/css/slate.css"  rel="stylesheet" type="text/css">
+    <link href="{{ SITEURL }}/theme/css/custom.css" rel="stylesheet" type="text/css">
+
+    <link rel="icon" type="image/png" href="{{ SITEURL }}/theme/img/golly-favicon.png">
+
+    <!--
+        Versions:
+        gollyx-vi-pelican: {{ GOLLYX_PELICAN_VERSION }}
+        gollyx-vi-pelican-theme: 614.0
+    -->
+
+    {% endblock head %}

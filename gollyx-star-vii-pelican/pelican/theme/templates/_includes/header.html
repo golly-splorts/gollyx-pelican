@@ -1,0 +1,25 @@
+    {% block head %}
+    <title>{{ SITENAME }}</title>
+    <meta charset="utf-8" />
+
+    <script>
+        var baseUIUrl  = '{{ GOLLYX_BASE_UI  }}';
+        var baseApiUrl = '{{ GOLLYX_BASE_API }}';
+        var mapsApiUrl = '{{ GOLLYX_MAPS_API }}';
+    </script>
+
+    <!--
+    CSS styles
+    -->
+    <link href="{{ SITEURL }}/theme/css/cyborg.css"  rel="stylesheet" type="text/css">
+    <link href="{{ SITEURL }}/theme/css/custom.css" rel="stylesheet" type="text/css">
+
+    <link rel="icon" type="image/png" href="{{ SITEURL }}/theme/img/star-favicon.png">
+
+    <!--
+        Versions:
+        gollyx-star-vii-pelican: {{ GOLLYX_PELICAN_VERSION }}
+        gollyx-star-vii-pelican-theme: 700.0
+    -->
+
+    {% endblock head %}

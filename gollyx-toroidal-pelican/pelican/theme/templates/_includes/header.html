@@ -1,0 +1,29 @@
+    {% block head %}
+    {#
+    <title>{% block title %}{% endblock title %}</title>
+    #}
+    <title>{{ SITENAME }}</title>
+    <meta charset="utf-8" />
+
+    <script>
+var baseUIUrl  = '{{ GOLLYX_BASE_UI  }}';
+var baseApiUrl = '{{ GOLLYX_BASE_API }}';
+var mapsApiUrl = '{{ GOLLYX_MAPS_API }}';
+    </script>
+
+    <!--
+    CSS styles
+    -->
+    <link href="{{ SITEURL }}/theme/css/slate.css"  rel="stylesheet" type="text/css">
+    <link href="{{ SITEURL }}/theme/css/custom.css" rel="stylesheet" type="text/css">
+    <link href="{{ SITEURL }}/theme/css/fa.css"     rel="stylesheet" type="text/css"/>
+
+    <link rel="icon" type="image/png" href="{{ SITEURL }}/theme/img/toroidal-favicon.png">
+
+    <!--
+        Versions:
+        gollyx-toroidal-pelican: {{ GOLLYX_TOROIDAL_PELICAN_VERSION }}
+        gollyx-toroidal-pelican-theme: 614.1
+    -->
+
+    {% endblock head %}
