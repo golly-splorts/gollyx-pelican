@@ -19,7 +19,7 @@ else:
     SITENAME = u'GollyX'
 
 PATH = 'content'
-THEME = 'gollyx-toroidal-pelican-theme'
+THEME = 'theme'
 
 # Don't try to turn HTML files into pages
 READERS = {'html': None}
@@ -59,9 +59,9 @@ TEMPLATE_PAGES['simulator/toroidal_life.html'] = 'simulator/index.html'
 TEMPLATE_PAGES['simulator/toroidal_life.js']   = 'simulator/toroidal_life.js'
 
 # minilife app is used on multiple pages,
-# so it lives in golly-pelican-theme
+# so it lives in theme/
 
-# These two env vars are used via Jinja in golly-pelican-theme (header.html) to set API/UI base URLs.
+# These two env vars are used via Jinja in theme/ (header.html) to set API/UI base URLs.
 # If they are empty strings, we use Javscript to deduce the base UI URL,
 # and insert "api." beteen the protocol and base URL to get the API URL.
 GOLLYX_BASE_UI = os.environ.get('GOLLYX_BASE_UI', '')
