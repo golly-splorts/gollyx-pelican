@@ -104,8 +104,15 @@ a:hover { color: #a8e6ff; }
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   padding: 6px;
   max-height: 70vh;
+  overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
 }
+
+/* Multi-column menus are Bootstrap rows; their negative margins would overflow the menu. */
+.dropdown-menu .row { margin: 0; }
+.dropdown-menu .row > ul { margin: 0; padding: 0 2px; }
 
 .dropdown-item {
   color: var(--text);
@@ -119,12 +126,11 @@ a:hover { color: #a8e6ff; }
   color: var(--text);
 }
 
-.teams-menu { width: 480px; margin: 0; }
-.teams-menu ul { margin: 0; padding: 0 2px; }
+.teams-menu { width: 480px; max-width: 100%; }
 
 @media (max-width: 991.98px) {
   .teams-menu { width: auto; }
-  .site-nav .dropdown-menu { box-shadow: none; }
+  .site-nav .dropdown-menu { box-shadow: none; max-width: 100%; }
 }
 
 /* ---------- page headers and notices ---------- */
@@ -434,6 +440,13 @@ h3.champion-header { font-size: clamp(22px, 3vw, 30px); margin-top: 8px; }
 #champion-icon-container .team-icon { width: 120px; height: 120px; margin: 24px auto 8px; }
 
 .flipdown-clock { padding: 24px 0 48px; }
+
+/* 510px and 312px are the countdown's own digit widths on wide and phone screens. */
+.flipdown { margin-left: auto; margin-right: auto; }
+
+@media (max-width: 650px) {
+  .flipdown { width: 510px !important; }
+}
 
 @media (max-width: 550px) {
   .flipdown { width: 312px !important; }
