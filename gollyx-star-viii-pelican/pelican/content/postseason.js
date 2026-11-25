@@ -503,7 +503,7 @@
           var iD;
           for (iD = 0; iD < descElems.length; iD++) {
             var descElem = descElems[iD];
-            descElem.innerHTML = minigame.description;
+            descElem.innerHTML = minigame.description.replace(", ", "<br>");
           }
         }
 
