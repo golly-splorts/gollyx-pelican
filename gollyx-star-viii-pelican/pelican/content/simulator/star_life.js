@@ -15,7 +15,7 @@
 
 (function () {
 
-  var realBackgroundColor = "#272b30";
+  var realBackgroundColor = "#060606";
   var gridStrokeColor1    = "#3a3a3a";
   var mapZoneStrokeColor  = "#dddddd";
   var grays = ["#303030", "#3f3f3f", "#494949", "#525252", "#5d5d5d"];
@@ -76,9 +76,7 @@
     // Geometry:
     defaultCols: 280,
     defaultRows: 180,
-    // Cells are drawn on a pitch of cellSize + 1 px; without a cellSize URL param the grid is fit to the page width.
-    minCellSize: 0,
-    maxCellSize: 20,
+    defaultCellSize: 3,
 
     //// Stability:
     //// Previously this was 240, but that was a bit too small for Star Wars CA
@@ -829,24 +827,14 @@
       // checking the specified value and setting to default
       // if invalid or not specified
       cellSize = parseInt(this.helpers.getUrlParameter('cellSize'));
-      if (isNaN(cellSize) || cellSize < this.minCellSize || cellSize > this.maxCellSize) {
-        cellSize = this.fitCellSize();
+      if (isNaN(cellSize) || cellSize < 1 || cellSize > 10) {
+        cellSize = this.defaultCellSize;
       }
       if (cellSize <= 5) {
         // Turn off the grid
         this.grid.current = 1;
       }
       return cellSize;
-    },
-
-    /**
-     * Largest cell size whose grid fits the page width (the canvas container is hidden while loading, so measure the header).
-     */
-    fitCellSize : function() {
-      var header = document.getElementById('container-golly-header');
-      var width = header ? header.clientWidth - 34 : window.innerWidth - 32;
-      var pitch = Math.floor(width / this.columns);
-      return Math.max(this.minCellSize, Math.min(this.maxCellSize, pitch - 1));
     },
 
     /**
