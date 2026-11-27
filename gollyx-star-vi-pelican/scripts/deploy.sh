@@ -10,7 +10,7 @@ if [ -z ${GOLLYX_PELICAN_HOME+x} ]; then
 	echo 'You must set the $GOLLYX_PELICAN_HOME environment variable to proceed.'
     echo 'Try sourcing environment.{STAGE}'
 	exit 1
-else 
+else
 	echo "\$GOLLYX_PELICAN_HOME is set to '$GOLLYX_PELICAN_HOME'"
 fi
 
@@ -18,7 +18,7 @@ if [ -z ${GOLLYX_STAGE+x} ]; then
 	echo 'You must set the $GOLLYX_STAGE environment variable to proceed.'
     echo 'Try sourcing environment.{STAGE}'
 	exit 1
-else 
+else
 	echo "\$GOLLYX_STAGE is set to '$GOLLYX_STAGE'"
 fi
 
@@ -66,11 +66,9 @@ pelican content
 echo "Committing new content..."
 cd output
 
-# Set the username for git commit
-git config user.name "Ch4zm of Hellmouth"
-
-# Set the email for git commit
-git config user.email "ch4zm.of.hellmouth@gmail.com"
+# Use orchestrator credentials by default
+git config user.name "Gollyx Orchestrator"
+git config user.email "orchestrator@golly.life"
 
 echo $DOM > CNAME
 
@@ -92,7 +90,7 @@ if [[ $DRY_RUN == "--dry-run" ]]; then
     echo "Skipping push step, --dry-run flag present"
 else
     echo "Pushing to remote"
-    GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_rsa_ch4zm -o IdentitiesOnly=yes -o StrictHostKeyChecking=no" git push origin gh-pages
+    git push origin gh-pages
 fi
 )
 
